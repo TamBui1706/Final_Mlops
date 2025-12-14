@@ -1,0 +1,53 @@
+name: Train Model - Tự động Training
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # Chạy mỗi Chủ nhật lúc 2 giờ sáng
+  workflow_dispatch:
+    inputs:
+      epochs:
+        description: 'Số epochs'
+        required: false
+        default: '50'
+
+jobs:
+  train:
+    name: Training Model
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cài đặt Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Cài đặt dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Kiểm tra data
+        run: |
+          echo "📂 Checking data..."
+          if [ -d "train" ] && [ -d "validation" ]; then
+            echo "✅ Data directories exist"
+          else
+            echo "❌ Data missing"
+            exit 1
+          fi
+
+      - name: Train model
+        run: |
+          echo "🚂 Training model..."
+          # python src/train.py --epochs ${{ github.event.inputs.epochs || '50' }}
+          echo "⚠️ Uncomment command trên để train thật"
+          echo "✅ Training script ready"
+
+      - name: Upload model
+        uses: actions/upload-artifact@v3
+        with:
+          name: trained-model
+          path: models/
+          retention-days: 30

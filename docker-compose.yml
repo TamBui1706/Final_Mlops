@@ -1,0 +1,173 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for MLflow and Airflow
+  postgres:
+    image: postgres:14
+    container_name: rice-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mlflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rice-network
+
+  # MLflow tracking server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    container_name: rice-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://postgres:postgres@postgres:5432/mlflow
+      - MLFLOW_ARTIFACT_ROOT=./mlruns
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow
+      --default-artifact-root /mlflow/mlruns
+      --host 0.0.0.0
+      --port 5000
+    depends_on:
+      - postgres
+    networks:
+      - rice-network
+
+  # Training service
+  trainer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.train
+    container_name: rice-trainer
+    volumes:
+      - ./train:/app/train
+      - ./validation:/app/validation
+      - ./models:/app/models
+      - ./logs:/app/logs
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - CUDA_VISIBLE_DEVICES=0
+    env_file:
+      - .env
+    depends_on:
+      - mlflow
+    networks:
+      - rice-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Inference API
+  api:
+    image: rice-disease-api:latest
+    container_name: rice-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - MODEL_PATH=/app/models/efficientnet_b0_optimized/best_model.pth
+      - MODEL_NAME=efficientnet_b0
+      - IMAGE_SIZE=224
+    env_file:
+      - .env
+    depends_on:
+      - mlflow
+    networks:
+      - rice-network
+    restart: unless-stopped
+
+  # Airflow webserver
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    container_name: rice-airflow-webserver
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    depends_on:
+      - postgres
+    networks:
+      - rice-network
+    command: airflow webserver
+
+  # Airflow scheduler
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    container_name: rice-airflow-scheduler
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    depends_on:
+      - postgres
+      - airflow-webserver
+    networks:
+      - rice-network
+    command: airflow scheduler
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rice-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - rice-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rice-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - rice-network
+
+volumes:
+  postgres_data:
+  mlflow_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  rice-network:
+    driver: bridge

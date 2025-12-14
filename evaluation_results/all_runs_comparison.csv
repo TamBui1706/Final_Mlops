@@ -1,0 +1,4 @@
+config_name,run_name,model_name,learning_rate,batch_size,weight_decay,best_val_acc,best_val_loss,final_train_acc,final_train_loss,epochs,run_id,status
+efficientnet_b0_optimized,efficientnet_b0_optimized_20251214_012804,efficientnet_b0,0.0005,16,5e-05,98.67424242424242,0.04470133207117518,96.08778625954199,0.10742837486731756,15,4b8e6057500b4b03bef452bac0c212dd,FINISHED
+mobilenetv3_large,mobilenetv3_large_20251214_104611,mobilenetv3_large_100,0.001,32,0.0001,98.29545454545455,0.049021003147679626,97.21153846153847,0.08601825346883674,20,adf0b851ce874d07b13c9e03a67ce7df,FINISHED
+efficientnet_b0_baseline,efficientnet_b0_baseline_20251214_000508,efficientnet_b0,0.001,32,0.0001,97.72727272727273,0.06504367095733281,96.10576923076923,0.11181809915086398,15,6b841f77cb8146749c21e9ec670206f6,FINISHED

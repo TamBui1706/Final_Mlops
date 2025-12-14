@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# DVC - Track .dvc directory but ignore cache
+!.dvc/
+!.dvc/**
+.dvc/cache/
+.dvc/tmp/
+.dvc/cache
+.dvc/tmp
+
+# Models & Data
+models/*.pth
+models/*.pt
+*.h5
+*.onnx
+
+# Logs
+logs/
+*.log
+runs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment
+.env
+
+# Airflow
+airflow/logs/
+airflow/*.db
+airflow/*.pid
+airflow/*.cfg
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db

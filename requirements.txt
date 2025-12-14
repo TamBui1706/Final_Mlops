@@ -1,0 +1,47 @@
+# Core ML/DL Framework
+torch
+torchvision
+timm
+
+# Data Processing
+numpy
+pandas
+opencv-python
+albumentations
+scikit-learn
+Pillow
+
+# MLOps Tools
+mlflow
+dvc
+dvc-gdrive
+
+# API & Web
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# Workflow Orchestration
+apache-airflow
+apache-airflow-providers-docker
+
+# Monitoring & Logging
+prometheus-client
+tensorboard
+wandb
+
+# Testing & Quality
+pytest
+pytest-cov
+black
+flake8
+isort
+pre-commit
+
+# Utilities
+python-dotenv
+pyyaml
+tqdm
+matplotlib
+seaborn

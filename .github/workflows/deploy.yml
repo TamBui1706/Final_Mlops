@@ -1,0 +1,54 @@
+name: Deploy - Production
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    name: Build và Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Images
+        run: |
+          echo "🔨 Building Docker images..."
+          docker build -f docker/Dockerfile.api -t rice-disease-api:latest .
+          docker build -f docker/Dockerfile.train -t rice-disease-train:latest .
+          echo "✅ Build complete"
+
+      - name: Test images
+        run: |
+          echo "🧪 Testing Docker images..."
+          docker run --rm rice-disease-api:latest python --version
+          echo "✅ Images OK"
+
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy với Docker Compose
+        run: |
+          echo "🚀 Deploying application..."
+          # docker-compose up -d api mlflow
+          echo "⚠️ Configure deployment server và uncomment command trên"
+          echo "✅ Deployment script ready"
+
+      - name: Health check
+        run: |
+          echo "🏥 Checking service health..."
+          # curl -f http://localhost:8000/health
+          echo "⚠️ Configure health check endpoint"
+          echo "✅ Health check ready"

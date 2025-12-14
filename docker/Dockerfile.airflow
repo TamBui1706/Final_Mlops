@@ -1,0 +1,29 @@
+# Use official Airflow image (pre-built with all dependencies)
+FROM apache/airflow:2.8.0-python3.9
+
+USER root
+
+# Install netcat for healthcheck
+RUN apt-get update && apt-get install -y \
+    netcat-traditional \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# Install additional Python packages if needed
+RUN pip install --no-cache-dir \
+    apache-airflow-providers-docker==3.7.2
+
+# Copy Airflow DAGs
+COPY --chown=airflow:root airflow/dags/ ${AIRFLOW_HOME}/dags/
+
+# Entrypoint script
+COPY --chown=airflow:root docker/airflow-entrypoint.sh /entrypoint.sh
+
+USER root
+RUN chmod +x /entrypoint.sh
+
+USER airflow
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["airflow", "webserver"]

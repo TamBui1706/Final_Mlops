@@ -1,0 +1,62 @@
+{
+  "dashboard": {
+    "title": "Rice Disease Model Performance",
+    "tags": ["ml", "model", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Predictions per Second",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(predictions_total[1m])",
+            "legendFormat": "Predictions/sec"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Inference Latency (P95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(inference_duration_seconds_bucket[5m]))",
+            "legendFormat": "P95 Latency"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Predictions by Class",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum by(class) (predictions_by_class)",
+            "legendFormat": "{{class}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(inference_errors_total[5m]) / rate(predictions_total[5m]) * 100",
+            "legendFormat": "Error Rate (%)"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s"
+  }
+}
