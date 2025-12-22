@@ -18,23 +18,22 @@ services:
 
   # MLflow tracking server
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.9.2
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mlflow
+    image: rice-mlflow:latest
     container_name: rice-mlflow
     ports:
       - "5000:5000"
-    environment:
-      - MLFLOW_BACKEND_STORE_URI=postgresql://postgres:postgres@postgres:5432/mlflow
-      - MLFLOW_ARTIFACT_ROOT=./mlruns
     volumes:
-      - mlflow_data:/mlflow
+      - ./mlruns:/mlflow/mlruns
+      - ./mlartifacts:/mlflow/mlartifacts
     command: >
       mlflow server
-      --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow
+      --backend-store-uri /mlflow/mlruns
       --default-artifact-root /mlflow/mlruns
       --host 0.0.0.0
       --port 5000
-    depends_on:
-      - postgres
     networks:
       - rice-network
 
@@ -58,13 +57,14 @@ services:
       - mlflow
     networks:
       - rice-network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # GPU support commented out - uncomment if needed
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
 
   # Inference API
   api:
@@ -74,6 +74,8 @@ services:
       - "8000:8000"
     volumes:
       - ./models:/app/models
+      - ./api:/app/api
+      - ./src:/app/src
     environment:
       - MODEL_PATH=/app/models/efficientnet_b0_optimized/best_model.pth
       - MODEL_NAME=efficientnet_b0
@@ -97,6 +99,10 @@ services:
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
+      - ./train:/opt/airflow/train
+      - ./validation:/opt/airflow/validation
+      - ./models:/opt/airflow/models
+      - ./src:/opt/airflow/src
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
@@ -117,6 +123,10 @@ services:
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
+      - ./train:/opt/airflow/train
+      - ./validation:/opt/airflow/validation
+      - ./models:/opt/airflow/models
+      - ./src:/opt/airflow/src
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor

@@ -339,7 +339,10 @@ async def batch_predict(files: List[UploadFile] = File(...)):
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
-    return Response(content=generate_latest(), media_type="text/plain")
+    return Response(
+        content=generate_latest(),
+        media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 if __name__ == "__main__":

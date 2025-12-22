@@ -1,824 +1,1404 @@
-# 🎯 Complete MLOps Demo Guide - Rice Leaf Disease Classification
+# 🚀 HƯỚNG DẪN DEMO HOÀN CHỈNH - MLOPS PROJECT
+# Rice Leaf Disease Classification
 
-**Thời gian demo**: 15-20 phút
-**Mục tiêu**: Chứng minh end-to-end MLOps pipeline đầy đủ
+> **Tài liệu demo tổng hợp tất cả các công cụ MLOps với các câu lệnh chính xác**
+
+**Thời gian demo**: 30-45 phút  
+**Ngày cập nhật**: December 15, 2025
 
 ---
 
-## 📋 Checklist Chuẩn Bị Trước Demo
+## 📑 MỤC LỤC
 
-### 1. Kiểm tra Services đang chạy
+1. [Tổng Quan Hệ Thống](#1-tổng-quan-hệ-thống)
+2. [Chuẩn Bị Demo](#2-chuẩn-bị-demo)
+3. [MLflow - Experiment Tracking](#3-mlflow---experiment-tracking--model-registry)
+4. [Training Models](#4-training-models)
+5. [FastAPI - REST API](#5-fastapi---rest-api-deployment)
+6. [Docker - Containerization](#6-docker---containerization)
+7. [Apache Airflow - Orchestration](#7-apache-airflow---workflow-orchestration)
+8. [Prometheus & Grafana - Monitoring](#8-prometheus--grafana---monitoring)
+9. [Demo Flow Hoàn Chỉnh](#9-demo-flow-hoàn-chỉnh)
+10. [Troubleshooting](#10-troubleshooting)
+
+---
+
+## 1. TỔNG QUAN HỆ THỐNG
+
+### 🎯 Project Overview
+
+**Rice Leaf Disease Classification** - Hệ thống MLOps End-to-End hoàn chỉnh
+
+- **Model**: EfficientNet-B0 (98.67% accuracy)
+- **Dataset**: 2,100 training + 528 validation images
+- **Classes**: 6 loại bệnh lá lúa
+
+### 🏗️ Architecture Stack
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     MLOps Pipeline                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Data → Training → MLflow → Model Registry → API → Monitor │
+│    ↓        ↓         ↓           ↓           ↓       ↓    │
+│  DVC    Airflow   Tracking   Versioning   FastAPI  Grafana │
+│                                              Docker         │
+│                                            Prometheus        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 📦 Services & Ports
+
+| Service | Port | URL | Credentials |
+|---------|------|-----|-------------|
+| MLflow | 5000 | http://localhost:5000 | - |
+| FastAPI | 8000 | http://localhost:8000 | - |
+| Swagger UI | 8000 | http://localhost:8000/docs | - |
+| Airflow | 8080 | http://localhost:8080 | admin/admin |
+| Prometheus | 9090 | http://localhost:9090 | - |
+| Grafana | 3000 | http://localhost:3000 | admin/admin |
+| PostgreSQL | 5432 | localhost:5432 | postgres/postgres |
+
+---
+
+## 2. CHUẨN BỊ DEMO
+
+### 2.1. Kiểm Tra Environment
+
 ```powershell
-# MLflow
-curl http://localhost:5000
+# 1. Kiểm tra Python
+python --version  # Expected: 3.9+
 
-# API
+# 2. Kiểm tra Docker
+docker --version
+docker-compose --version
+
+# 3. Kiểm tra Git
+git --version
+
+# 4. Navigate to project
+cd e:\MLOps\Final\RiceLeafsDisease
+```
+
+### 2.2. Cài Đặt Dependencies (Nếu chưa có)
+
+```powershell
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+.\venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install -e .
+```
+
+### 2.3. Kiểm Tra Dataset
+
+```powershell
+# Count training images
+Get-ChildItem -Path .\train -Recurse -File | Measure-Object | Select-Object -ExpandProperty Count
+# Expected: 2,100
+
+# Count validation images
+Get-ChildItem -Path .\validation -Recurse -File | Measure-Object | Select-Object -ExpandProperty Count
+# Expected: 528
+
+# List classes
+Get-ChildItem -Path .\train -Directory | Select-Object Name
+```
+
+### 2.4. Start All Services (Quick Start)
+
+```powershell
+# Option 1: Start all with Docker Compose
+docker-compose up -d
+
+# Option 2: Start services individually
+# (See sections below for detailed instructions)
+```
+
+### 2.5. Verify Services Running
+
+```powershell
+# Check Docker containers
+docker-compose ps
+
+# Check health endpoints
+curl http://localhost:8000/health    # API
+curl http://localhost:5000           # MLflow
+curl http://localhost:8080           # Airflow
+curl http://localhost:9090           # Prometheus
+curl http://localhost:3000           # Grafana
+```
+
+---
+
+## 3. MLFLOW - EXPERIMENT TRACKING & MODEL REGISTRY
+
+### 3.1. Khởi Động MLflow Server
+
+#### Option 1: Local (Simple)
+
+```powershell
+# Start MLflow server
+mlflow server --host 0.0.0.0 --port 5000
+
+# Hoặc dùng UI mode
+mlflow ui --port 5000
+```
+
+#### Option 2: With PostgreSQL Backend (Production)
+
+```powershell
+# Start PostgreSQL (if not running)
+docker run -d `
+  --name mlflow-postgres `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_PASSWORD=postgres `
+  -e POSTGRES_DB=mlflow `
+  -p 5432:5432 `
+  postgres:14
+
+# Start MLflow with PostgreSQL
+mlflow server `
+  --backend-store-uri postgresql://postgres:postgres@localhost:5432/mlflow `
+  --default-artifact-root ./mlruns `
+  --host 0.0.0.0 `
+  --port 5000
+```
+
+#### Option 3: Docker Compose (Recommended)
+
+```powershell
+# Already running if you did docker-compose up -d
+# Access at http://localhost:5000
+```
+
+### 3.2. Verify MLflow Connection
+
+```powershell
+# Test connection
+python -c "import mlflow; mlflow.set_tracking_uri('http://localhost:5000'); print('✓ Connected:', mlflow.get_tracking_uri())"
+```
+
+### 3.3. MLflow UI - Key Features
+
+**Open Browser**: http://localhost:5000
+
+**Features to Demo**:
+
+1. **Experiments Tab**
+   - View all experiments
+   - Filter by name, metrics
+
+2. **Runs List**
+   - See all training runs
+   - Metrics: loss, accuracy, precision, recall, f1
+
+3. **Compare Runs**
+   - Select multiple runs → Compare
+   - Side-by-side metrics comparison
+   - Parallel coordinates plot
+
+4. **Run Details**
+   - Parameters logged
+   - Metrics charts
+   - Artifacts (model, plots)
+   - System info
+
+5. **Model Registry**
+   - Registered models
+   - Model versions
+   - Stages: None → Staging → Production
+   - Model lineage
+
+### 3.4. MLflow CLI Commands
+
+```powershell
+# List experiments
+mlflow experiments list
+
+# Search runs
+mlflow runs list --experiment-id 0
+
+# Describe run
+mlflow runs describe --run-id <RUN_ID>
+
+# List models
+mlflow models list
+
+# Serve model
+mlflow models serve -m "models:/rice-disease-classifier/Production" -p 5001
+```
+
+---
+
+## 4. TRAINING MODELS
+
+### 4.1. Training Single Model
+
+```powershell
+# Basic training (50 epochs)
+python src/train.py `
+  --train-dir train `
+  --val-dir validation `
+  --epochs 50
+
+# Training with custom parameters
+python src/train.py `
+  --train-dir train `
+  --val-dir validation `
+  --epochs 30 `
+  --batch-size 32 `
+  --lr 0.001 `
+  --model-name efficientnet_b0
+
+# Quick training for demo (5 epochs)
+python src/train.py --epochs 5 --model-name efficientnet_b0
+```
+
+**What gets logged to MLflow**:
+- ✅ All hyperparameters
+- ✅ Loss, accuracy per epoch
+- ✅ Precision, recall, f1-score
+- ✅ Confusion matrix image
+- ✅ Best model checkpoint
+- ✅ Training time, GPU memory
+
+### 4.2. Training Multiple Models (Comparison)
+
+```powershell
+# Compare 3 architectures
+python src/train_comparison.py
+
+# Or train individually
+python src/train.py --model-name efficientnet_b0 --epochs 50
+python src/train.py --model-name mobilenetv3_large --epochs 50
+```
+
+### 4.3. View Training Results
+
+**In MLflow UI**:
+1. Go to http://localhost:5000
+2. Select experiment: `rice-disease-classification`
+3. See all runs with metrics
+4. Click run → View details
+5. Compare multiple runs
+
+**Via CLI**:
+
+```powershell
+# Find best run
+python src/find_run.py
+
+# View comparison results
+python src/view_comparison.py
+
+# View all results
+python src/view_all_results.py
+```
+
+### 4.4. Evaluate Model
+
+```powershell
+# Evaluate on validation set
+python src/evaluate.py `
+  --val-dir validation `
+  --model-path models/efficientnet_b0_optimized/best_model.pth `
+  --model-name efficientnet_b0
+
+# Results saved to: evaluation_results/metrics.json
+```
+
+### 4.5. Register Best Model
+
+```powershell
+# Setup model registry
+python setup_model_registry.py
+
+# Or register manually
+python register_model.py
+```
+
+---
+
+## 5. FASTAPI - REST API DEPLOYMENT
+
+### 5.1. Start API Server
+
+```powershell
+# Method 1: Using start script (Recommended)
+python start_api.py
+
+# Method 2: Direct uvicorn
+uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+
+# Method 3: Docker (if using docker-compose)
+docker-compose up -d api
+```
+
+**Expected Output**:
+```
+🚀 STARTING RICE DISEASE API
+Model: models/efficientnet_b0_optimized/best_model.pth
+Server: http://localhost:8000
+Docs: http://localhost:8000/docs
+```
+
+### 5.2. API Endpoints Overview
+
+**Interactive Docs**: http://localhost:8000/docs
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Root info |
+| `/health` | GET | Health check |
+| `/model/info` | GET | Model information |
+| `/predict` | POST | Single image prediction |
+| `/batch_predict` | POST | Batch predictions |
+| `/metrics` | GET | Prometheus metrics |
+
+### 5.3. Test API - Health Check
+
+```powershell
+# PowerShell
+Invoke-RestMethod -Uri "http://localhost:8000/health" -Method Get
+
+# curl (if available)
 curl http://localhost:8000/health
-
-# Prometheus
-curl http://localhost:9090/-/healthy
-
-# Grafana
-curl http://localhost:3000/api/health
-
-# Airflow
-curl http://localhost:8080/health
-
-# Docker containers
-docker ps --format "table {{.Names}}\t{{.Status}}"
 ```
 
-**Expected containers:**
-- rice-postgres (Up)
-- rice-mlflow (Up) - hoặc chạy local
-- rice-airflow-webserver (Up)
-- rice-airflow-scheduler (Up)
-- rice-prometheus (Up)
-- rice-grafana (Up)
-
-### 2. Chuẩn bị Credentials
-- **MLflow**: http://localhost:5000 (no auth)
-- **Grafana**: admin / admin
-- **Airflow**: admin / admin
-- **API**: http://localhost:8000/docs (no auth)
-
-### 3. Chuẩn bị Data
-```powershell
-# Kiểm tra validation images có sẵn
-ls validation/
-```
-
-### 4. Open Browser Tabs (chuẩn bị trước)
-1. MLflow UI: http://localhost:5000
-2. Swagger API: http://localhost:8000/docs
-3. Prometheus: http://localhost:9090
-4. Grafana: http://localhost:3000
-5. Airflow: http://localhost:8080
-
----
-
-## 🎬 Demo Flow (15-20 phút)
-
-### **Phần 1: Giới thiệu & System Architecture (1 phút)**
-
-**Mở README.md và scroll đến diagram**
-
-**Giải thích:**
-*"Đây là hệ thống MLOps end-to-end cho Rice Leaf Disease Classification. Hệ thống bao gồm 4 phase chính:"*
-
-1. **Data & Training** - EfficientNet B0, data augmentation
-2. **Experiment Tracking** - MLflow tracking & model registry
-3. **CI/CD & Deployment** - Docker, Airflow orchestration
-4. **Monitoring & Feedback** - Prometheus metrics, Grafana dashboards
-
-**Công nghệ stack:**
-- **ML Framework**: PyTorch, timm
-- **Experiment Tracking**: MLflow
-- **Orchestration**: Apache Airflow
-- **Containerization**: Docker, Docker Compose
-- **Monitoring**: Prometheus + Grafana
-- **API**: FastAPI
-- **Testing**: Pytest
-
----
-
-### **Phần 2: Data & Training Pipeline (2 phút)**
-
-#### 2.1. Dataset Overview
-```powershell
-# Xem cấu trúc data
-ls train/
-ls validation/
-```
-
-**Giải thích:**
-- 6 classes: bacterial_leaf_blight, brown_spot, healthy, leaf_blast, leaf_scald, narrow_brown_spot
-- Train: ~3000 images
-- Validation: ~600 images
-
-#### 2.2. Show Training Code (optional)
-```powershell
-code src/train.py
-```
-
-**Highlight:**
-- Data augmentation (rotation, flip, color jitter)
-- EfficientNet B0 backbone
-- MLflow integration
-- Mixed precision training
-
-#### 2.3. Model Comparison Results
-```powershell
-code evaluation_results/model_comparison_20251214_121933.csv
-```
-
-**Nói:**
-*"Đã thử nghiệm 3 architectures: EfficientNet B0, MobileNetV3, và baseline. EfficientNet B0 optimized đạt accuracy cao nhất 95.08%."*
-
----
-
-### **Phần 3: MLflow Experiment Tracking (3 phút)**
-
-#### 3.1. Mở MLflow UI
-```
-http://localhost:5000
-```
-
-#### 3.2. Demo Experiments
-1. Click vào experiment **"rice-disease-classification"**
-2. Chỉ vào danh sách runs với metrics
-
-**Giải thích:**
-- Mỗi run = 1 lần training
-- Track: accuracy, loss, learning rate, hyperparameters
-- Artifacts: model checkpoints, confusion matrix, training logs
-
-#### 3.3. So sánh Runs
-1. Chọn 2-3 runs → **Compare**
-2. Tab **Metric** - Line chart so sánh val_accuracy
-3. Tab **Parameters** - Table so sánh hyperparameters
-
-**Nói:**
-*"MLflow cho phép compare experiments dễ dàng. Nhìn thấy run nào performance tốt hơn, hyperparameters nào optimal."*
-
-#### 3.4. View Artifacts
-1. Click vào best run
-2. Scroll xuống **Artifacts**
-3. Click vào confusion_matrix.png
-
-**Nói:**
-*"MLflow lưu tất cả artifacts: model weights, confusion matrix, training curves."*
-
----
-
-### **Phần 4: Model Registry & Versioning (2 phút)**
-
-#### 4.1. Truy cập Model Registry
-1. MLflow UI → Tab **Models**
-2. Click **rice-disease-classifier**
-
-**Giải thích:**
-- Model registry = model versioning system
-- Mỗi version là 1 model khác nhau
-- Stages: None, Staging, Production, Archived
-
-#### 4.2. Model Versions
-**Chỉ vào:**
-- Version 1, 2, 3... với timestamps
-- Stage hiện tại (Production)
-- Source run link
-
-#### 4.3. Demo Model Transition
-```powershell
-# Xem model registry code
-code register_model.py
-```
-
-**Nói:**
-*"Model tốt nhất được register vào registry. CI/CD pipeline tự động promote lên Production nếu pass validation."*
-
-**Workflow:**
-```
-Train model → Log to MLflow → Register to Registry
-→ Transition to Staging → Run tests → Promote to Production
-```
-
----
-
-### **Phần 5: API Deployment & Inference (2 phút)**
-
-#### 5.1. API Documentation
-```
-http://localhost:8000/docs
-```
-
-**Giải thích Swagger UI:**
-- **GET /** - Root endpoint
-- **GET /health** - Health check
-- **GET /model/info** - Model metadata
-- **POST /predict** - Inference endpoint
-- **GET /metrics** - Prometheus metrics
-
-#### 5.2. Test Health Check
-1. Click **GET /health** → **Try it out** → **Execute**
-
-**Expected response:**
+**Expected Response**:
 ```json
 {
   "status": "healthy",
   "model_loaded": true,
-  "device": "cuda",
-  "model_name": "efficientnet_b0",
-  "num_classes": 6
+  "device": "cuda"
 }
 ```
 
-#### 5.3. Test Prediction
-1. Click **POST /predict** → **Try it out**
-2. Click **Choose File** → Chọn ảnh từ `validation/leaf_blast/`
-3. Click **Execute**
+### 5.4. Test API - Single Prediction
 
-**Expected response:**
+#### Using Python Script
+
+```powershell
+# Quick test
+python quick_test_api.py
+
+# Detailed test
+python test_api.py
+```
+
+#### Using PowerShell
+
+```powershell
+# Set variables
+$imagePath = "validation\healthy\healthy_001.jpg"
+$uri = "http://localhost:8000/predict"
+
+# Send request
+$form = @{
+    file = Get-Item -Path $imagePath
+}
+$response = Invoke-RestMethod -Uri $uri -Method Post -Form $form
+
+# Display result
+$response | ConvertTo-Json
+```
+
+#### Using Swagger UI
+
+1. Open http://localhost:8000/docs
+2. Find `/predict` endpoint
+3. Click **"Try it out"**
+4. Click **"Choose File"** → Select image
+5. Click **"Execute"**
+6. See response below
+
+**Expected Response**:
 ```json
 {
-  "class_name": "leaf_blast",
-  "confidence": 0.9823,
+  "class_name": "healthy",
+  "confidence": 0.9845,
   "probabilities": {
-    "leaf_blast": 0.9823,
+    "bacterial_leaf_blight": 0.0023,
     "brown_spot": 0.0098,
-    "healthy": 0.0045,
-    ...
+    "healthy": 0.9845,
+    "leaf_blast": 0.0032,
+    "leaf_scald": 0.0001,
+    "narrow_brown_spot": 0.0001
   },
   "inference_time": 0.0234
 }
 ```
 
-**Nói:**
-*"API inference real-time. Response time ~20-30ms trên CPU, ~10ms trên GPU."*
+### 5.5. Test API - Batch Prediction
 
----
-
-### **Phần 6: Monitoring với Prometheus & Grafana (3 phút)**
-
-#### 6.1. Prometheus Metrics
-```
-http://localhost:9090
-```
-
-1. Click **Status** → **Targets**
-2. Verify **rice-api** target UP (green)
-
-**Test queries:**
-```promql
-# Total requests
-inference_requests_total
-
-# Request rate
-rate(inference_requests_total[1m])
-
-# Average latency
-rate(inference_latency_seconds_sum[5m]) / rate(inference_latency_seconds_count[5m])
-
-# Predictions by class
-predictions_by_class_total
-```
-
-**Nói:**
-*"Prometheus scrape metrics từ API mỗi 15 seconds. Track inference requests, latency, predictions by class."*
-
-#### 6.2. Grafana Dashboard
-```
-http://localhost:3000
-```
-
-**Login:** admin / admin
-
-1. Click **Dashboards** → **Rice Disease API Monitoring**
-
-**Dashboard có 7 panels:**
-- **Request Rate** (requests/sec) - Line chart
-- **Average Response Time** (ms) - Line chart
-- **P95 Latency** - Gauge
-- **Total Requests** - Stat panel (counter)
-- **Predictions by Class** - Bar chart
-- **Request Count Over Time** - Area chart
-- **System Health** - Gauge (success rate %)
-
-#### 6.3. Generate Live Traffic
-**Quay lại Swagger UI:**
-1. Gửi nhiều prediction requests liên tục (5-10 requests)
-2. Upload ảnh từ các classes khác nhau
-
-**Quay lại Grafana:**
-1. Set auto-refresh: **5s** (góc trên bên phải)
-2. Watch metrics update real-time
-
-**Nói:**
-*"Grafana dashboard update real-time. Thấy requests tăng, latency, distribution theo classes. Production có thể set alerts khi error rate cao hoặc latency vượt threshold."*
-
----
-
-### **Phần 7: Orchestration với Airflow (2 phút)**
-
-#### 7.1. Airflow UI
-```
-http://localhost:8080
-```
-
-**Login:** admin / admin
-
-**Giải thích:**
-*"Airflow orchestrate toàn bộ MLOps workflow - training, evaluation, deployment."*
-
-#### 7.2. Training Pipeline
-1. Click **rice_disease_training_pipeline**
-2. Click tab **Graph**
-
-**Workflow:**
-```
-validate_data → setup_dvc → train_model
-→ evaluate_model → notify_completion
-```
-
-**Giải thích từng task:**
-- `validate_data` - Check data availability và quality
-- `setup_dvc` - Data versioning với DVC
-- `train_model` - Train model trong Docker container
-- `evaluate_model` - Evaluate trên validation set
-- `notify_completion` - Send notification
-
-**Schedule:** Weekly (hàng tuần)
-
-#### 7.3. Deployment Pipeline
-1. Quay lại **DAGs**
-2. Click **rice_disease_deployment_pipeline**
-3. Tab **Graph**
-
-**Workflow:**
-```
-validate_model → build_docker_image
-→ deploy_to_staging → run_smoke_tests
-→ deploy_to_production
-```
-
-**Nói:**
-*"Deployment pipeline tự động: validate model accuracy > 80%, build Docker image, deploy staging, run tests, rồi mới deploy production. Safety nets để avoid deploying bad models."*
-
-#### 7.4. Trigger DAG (optional)
-1. Bật toggle switch (enable DAG)
-2. Click ▶️ **Trigger DAG**
-3. Xem execution logs
-
-**Nói:**
-*"Production chạy tự động theo schedule. Có thể trigger manually để test."*
-
----
-
-### **Phần 8: Docker & Containerization (2 phút)**
-
-#### 8.1. View Running Containers
 ```powershell
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+# Using curl (multiple files)
+curl -X POST "http://localhost:8000/batch_predict" `
+  -F "files=@validation/healthy/healthy_001.jpg" `
+  -F "files=@validation/brown_spot/brown_spot_001.jpg" `
+  -F "files=@validation/leaf_blast/leaf_blast_001.jpg"
 ```
 
-**Expected output:**
-```
-NAMES                    STATUS          PORTS
-rice-grafana            Up 2 hours      0.0.0.0:3000->3000/tcp
-rice-prometheus         Up 2 hours      0.0.0.0:9090->9090/tcp
-rice-airflow-webserver  Up 2 hours      0.0.0.0:8080->8080/tcp
-rice-airflow-scheduler  Up 2 hours      8080/tcp
-rice-postgres           Up 2 hours      0.0.0.0:5432->5432/tcp
-```
+### 5.6. Model Info
 
-**Giải thích:**
-*"Toàn bộ stack containerized. 6 services chạy độc lập, communicate qua Docker network."*
-
-#### 8.2. Docker Compose
 ```powershell
-code docker-compose.yml
+curl http://localhost:8000/model/info
 ```
 
-**Highlight services:**
-- **postgres** - Database cho MLflow & Airflow
-- **mlflow** - Tracking server
-- **trainer** - Training service với GPU support
-- **api** - REST API inference
-- **airflow-webserver/scheduler** - Orchestration
-- **prometheus/grafana** - Monitoring stack
-
-**Nói:**
-*"Docker Compose manage multi-container app. Một lệnh `docker-compose up -d` để start toàn bộ infrastructure."*
-
-#### 8.3. View Logs
-```powershell
-# API logs
-docker logs rice-prometheus --tail 20
-
-# Follow logs real-time
-docker logs -f rice-grafana
-```
-
-#### 8.4. Benefits
-**Nói:**
-*"Docker benefits:"*
-- ✅ **Reproducibility** - Same environment dev to prod
-- ✅ **Isolation** - No dependency conflicts
-- ✅ **Scalability** - Easy horizontal scaling
-- ✅ **Portability** - Deploy anywhere có Docker
-
----
-
-### **Phần 9: Testing & Quality Assurance (2 phút)**
-
-#### 9.1. Run Unit Tests
-```powershell
-# Data pipeline tests
-python -m pytest tests/test_data.py -v
-
-# Model architecture tests
-python -m pytest tests/test_model.py -v
-```
-
-**Expected output:**
-```
-tests/test_data.py::test_rice_dataset PASSED
-tests/test_data.py::test_dataset_getitem PASSED
-tests/test_data.py::test_train_transforms PASSED
-tests/test_data.py::test_val_transforms PASSED
-tests/test_data.py::test_class_distribution PASSED
-
-====== 5 passed in 6.65s ======
-
-tests/test_model.py::test_create_model PASSED
-tests/test_model.py::test_model_forward PASSED
-tests/test_model.py::test_model_parameters PASSED
-tests/test_model.py::test_different_num_classes[2] PASSED
-tests/test_model.py::test_different_num_classes[6] PASSED
-tests/test_model.py::test_different_num_classes[10] PASSED
-
-====== 6 passed in 12.52s ======
-```
-
-#### 9.2. Coverage Report
-```powershell
-python -m pytest tests/test_data.py tests/test_model.py --cov=src --cov-report=term
-```
-
-**Expected coverage:**
-- dataset.py: 98%
-- model.py: 91%
-- Total: ~88-90%
-
-**Nói:**
-*"Comprehensive test suite. 11 unit tests passing. Coverage > 80% target. Tests chạy tự động trong CI/CD pipeline."*
-
-#### 9.3. Show Test Code (optional)
-```powershell
-code tests/test_model.py
-```
-
-**Highlight parametrized test:**
-```python
-@pytest.mark.parametrize("num_classes", [2, 6, 10])
-def test_different_num_classes(num_classes):
-    model = create_model("efficientnet_b0", num_classes=num_classes)
-    assert model.num_classes == num_classes
-```
-
-**Nói:**
-*"Parametrized tests để test multiple scenarios với 1 function. Efficient và maintainable."*
-
----
-
-### **Phần 10: Results & Model Comparison (1 phút)**
-
-#### 10.1. View Evaluation Results
-```powershell
-code evaluation_results/metrics.json
-```
-
-**Best model metrics:**
+**Response**:
 ```json
 {
-  "model_name": "efficientnet_b0_optimized",
-  "accuracy": 0.9508,
-  "precision": 0.9521,
-  "recall": 0.9508,
-  "f1_score": 0.9512
+  "model_name": "efficientnet_b0",
+  "num_classes": 6,
+  "total_parameters": 4049564,
+  "trainable_parameters": 4007516,
+  "device": "cuda",
+  "class_names": [...]
 }
 ```
 
-#### 10.2. Model Comparison
+---
+
+## 6. DOCKER - CONTAINERIZATION
+
+### 6.1. Docker Compose Overview
+
+**File**: `docker-compose.yml`
+
+**Services**:
+- 🐘 PostgreSQL (database)
+- 📊 MLflow (tracking server)
+- 🤖 API (inference service)
+- 🏋️ Trainer (training service)
+- 🔄 Airflow Webserver
+- 🔄 Airflow Scheduler
+- 📈 Prometheus (monitoring)
+- 📊 Grafana (visualization)
+
+### 6.2. Build Docker Images
+
 ```powershell
-code evaluation_results/model_comparison_20251214_121933.csv
+# Build all images
+docker-compose build
+
+# Build specific service
+docker build -f docker/Dockerfile.api -t rice-disease-api:latest .
+docker build -f docker/Dockerfile.train -t rice-disease-trainer:latest .
+docker build -f docker/Dockerfile.airflow -t rice-disease-airflow:latest .
 ```
 
-**Comparison table:**
-| Model | Accuracy | Parameters | Inference Time |
-|-------|----------|------------|----------------|
-| EfficientNet B0 Optimized | 95.08% | 4.0M | 23ms |
-| MobileNetV3 Large | 93.21% | 5.4M | 18ms |
-| EfficientNet B0 Baseline | 91.45% | 4.0M | 25ms |
+### 6.3. Start All Services
 
-**Nói:**
-*"EfficientNet B0 optimized balance tốt nhất giữa accuracy và speed. 95% accuracy với 23ms inference time."*
+```powershell
+# Start all services in background
+docker-compose up -d
 
----
+# Start specific services
+docker-compose up -d postgres mlflow api
 
-### **Phần 11: CI/CD Pipeline (1 phút - giải thích)**
-
-**Workflow (không demo trực tiếp, giải thích qua diagram/code):**
-
-```yaml
-# .github/workflows/mlops.yml
-name: MLOps Pipeline
-on: [push, pull_request]
-
-jobs:
-  test:
-    - Run pytest với coverage
-    - Lint code (flake8, black)
-    - Security scan (bandit)
-
-  build:
-    - Build Docker images
-    - Tag với git commit hash
-    - Push lên Container Registry
-
-  deploy:
-    - Deploy staging
-    - Run smoke tests
-    - If pass → Deploy production
-    - Send notifications
+# Start with logs
+docker-compose up
 ```
 
-**Nói:**
-*"CI/CD pipeline tự động:"*
-1. **Code push** → Trigger pipeline
-2. **Tests** run → Block merge nếu fail
-3. **Build** Docker images → Tag versions
-4. **Deploy staging** → Run smoke tests
-5. **Deploy production** → If all pass
-6. **Monitor** → Rollback if issues
+**Expected Output**:
+```
+✔ Container rice-postgres       Started
+✔ Container rice-mlflow         Started
+✔ Container rice-api            Started
+✔ Container rice-prometheus     Started
+✔ Container rice-grafana        Started
+✔ Container rice-airflow-webserver   Started
+✔ Container rice-airflow-scheduler   Started
+```
 
-*"Full automation from code commit to production."*
+### 6.4. Check Services Status
 
----
+```powershell
+# List running containers
+docker-compose ps
 
-### **Phần 12: Tổng kết (1 phút)**
+# Check specific service
+docker ps | Select-String "rice-api"
 
-**Recap các điểm chính:**
+# View resource usage
+docker stats
+```
 
-#### ✅ **End-to-End MLOps Pipeline**
-1. **Data & Training** - Automated training với data augmentation
-2. **Experiment Tracking** - MLflow track 10+ experiments
-3. **Model Registry** - Version control cho models
-4. **API Deployment** - FastAPI với Swagger docs
-5. **Monitoring** - Real-time metrics với Prometheus & Grafana
-6. **Orchestration** - Airflow automate workflows
-7. **Containerization** - Docker ensure consistency
-8. **Testing** - 11 tests, 88% coverage
-9. **CI/CD** - Automated pipeline
+### 6.5. View Logs
 
-#### 📊 **Key Metrics**
-- **Model Accuracy**: 95.08%
-- **Inference Time**: 23ms (CPU), ~10ms (GPU)
-- **API Uptime**: 99.9%
-- **Test Coverage**: 88%
-- **Experiments Tracked**: 10+
+```powershell
+# All services
+docker-compose logs -f
 
-#### 🎯 **Production-Ready Features**
-- ✅ Reproducible experiments
-- ✅ Automated training & deployment
-- ✅ Real-time monitoring & alerting
-- ✅ Model versioning & rollback
-- ✅ Comprehensive testing
-- ✅ Containerized infrastructure
+# Specific service
+docker-compose logs -f api
+docker-compose logs -f mlflow
+docker-compose logs -f airflow-webserver
 
-**Nói cuối cùng:**
-*"Đây là complete MLOps platform production-ready. Từ data ingestion, training, experiment tracking, deployment, monitoring cho đến CI/CD automation. All best practices: containerization, orchestration, monitoring, testing. System scalable, maintainable và reliable."*
+# Last N lines
+docker logs rice-api --tail 50
+```
 
----
+### 6.6. Exec into Containers
 
-## 🎯 Q&A Preparation
+```powershell
+# Access API container
+docker exec -it rice-api bash
 
-### Technical Questions
+# Access MLflow container
+docker exec -it rice-mlflow bash
 
-**Q1: "Làm sao để retrain model khi có data mới?"**
-A:
-1. Add data mới vào `train/` folder
-2. Airflow training pipeline chạy tự động weekly
-3. Hoặc trigger manual: Airflow UI → Trigger DAG
-4. Model tốt hơn → Auto register vào registry
-5. CI/CD pipeline test và deploy
+# Access PostgreSQL
+docker exec -it rice-postgres psql -U postgres -d mlflow
+```
 
-**Q2: "System handle bao nhiêu requests/second?"**
-A:
-- Single instance: ~50 req/s (CPU), ~200 req/s (GPU)
-- Horizontal scaling: Load balancer + multiple API containers
-- Kubernetes: Auto-scale based on CPU/memory
+### 6.7. Manage Containers
 
-**Q3: "Làm sao để rollback model nếu có issue?"**
-A:
-```python
-# MLflow UI: Model Registry
-# 1. Transition current Production → Archived
-# 2. Transition previous version → Production
+```powershell
+# Stop all services
+docker-compose stop
 
-# Or via API:
-from mlflow.tracking import MlflowClient
-client = MlflowClient()
-client.transition_model_version_stage(
-    name="rice-disease-classifier",
-    version=2,  # Previous good version
-    stage="Production"
-)
+# Start stopped services
+docker-compose start
 
-# API restart → Load new model
+# Restart specific service
 docker-compose restart api
+
+# Stop and remove containers
+docker-compose down
+
+# Stop and remove with volumes
+docker-compose down -v
+
+# Remove everything (containers, images, volumes)
+docker-compose down --rmi all -v
 ```
 
-**Q4: "Cost để run system này?"**
-A:
-- **Development**: Free (local machine)
-- **Production (AWS estimate)**:
-  - EC2 t3.medium (API): $30/month
-  - EC2 t3.small (monitoring): $15/month
-  - RDS PostgreSQL: $25/month
-  - S3 (artifacts): $5/month
-  - **Total**: ~$75-100/month
-  - GPU (optional): +$150/month
+### 6.8. Test Services in Docker
 
-**Q5: "Security considerations?"**
-A:
-- API authentication (JWT tokens)
-- HTTPS/TLS encryption
-- Container image scanning (Trivy)
-- Secret management (HashiCorp Vault)
-- Network policies (firewall rules)
-- Rate limiting & DDoS protection
+```powershell
+# Test API
+curl http://localhost:8000/health
 
-### MLOps Questions
+# Test MLflow
+curl http://localhost:5000
 
-**Q6: "Khác gì giữa traditional ML và MLOps?"**
-A:
+# Test Prometheus
+curl http://localhost:9090/-/healthy
 
-| Traditional ML | MLOps |
-|----------------|-------|
-| Manual training | Automated pipelines |
-| Jupyter notebooks | Production code |
-| Local experiments | Centralized tracking |
-| Manual deployment | CI/CD automation |
-| No monitoring | Real-time metrics |
-| Ad-hoc versioning | Model registry |
-
-**Q7: "Tại sao cần MLflow?"**
-A:
-- **Experiment Tracking**: Compare 10+ runs dễ dàng
-- **Reproducibility**: Track exact hyperparameters, code version
-- **Model Registry**: Version control cho models
-- **Collaboration**: Team access centralized experiments
-- **Deployment**: Easy transition Staging → Production
-
-**Q8: "Benefits của containerization?"**
-A:
-- **Consistency**: "Works on my machine" → Works everywhere
-- **Isolation**: No dependency conflicts
-- **Scalability**: Easy horizontal scaling
-- **Portability**: Deploy cloud or on-premise
-- **Rollback**: Simple version control
-
-**Q9: "Tại sao dùng Airflow thay vì cron jobs?"**
-A:
-- **Dependencies**: Task A → Task B → Task C
-- **Retry logic**: Auto retry khi fail
-- **Monitoring**: Web UI track executions
-- **Backfilling**: Re-run historical data
-- **Dynamic**: Generate DAGs programmatically
-
-**Q10: "How to handle model drift?"**
-A:
-1. **Monitor** prediction distribution (Grafana)
-2. **Alert** when confidence drop < threshold
-3. **Retrain** with new data automatically
-4. **A/B test** new model vs old model
-5. **Gradual rollout** (canary deployment)
+# Test Grafana
+curl http://localhost:3000/api/health
+```
 
 ---
 
-## 🔧 Troubleshooting Common Issues
+## 7. APACHE AIRFLOW - WORKFLOW ORCHESTRATION
 
-### Issue 1: MLflow không khởi động
+### 7.1. Access Airflow UI
+
+**URL**: http://localhost:8080  
+**Username**: `admin`  
+**Password**: `admin`
+
 ```powershell
-# Check process
-ps aux | Select-String mlflow
-
-# Restart MLflow
-# Terminal: mlflow
-mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000
+# Open in browser
+Start-Process http://localhost:8080
 ```
 
-### Issue 2: Prometheus không scrape được API
-```powershell
-# Check Prometheus config
-docker exec rice-prometheus cat /etc/prometheus/prometheus.yml
+### 7.2. Available DAGs
 
-# Should see: targets: ['host.docker.internal:8000']
-# If wrong, fix monitoring/prometheus.yml và restart:
-docker restart rice-prometheus
+#### DAG 1: Training Pipeline
+
+**Name**: `rice_disease_training_pipeline`  
+**Schedule**: `@weekly` (every Sunday)  
+**Purpose**: Automated model training workflow
+
+**Tasks**:
+1. `validate_data` - Validate dataset availability
+2. `setup_dvc` - Setup DVC for data versioning
+3. `train_model` - Train model in Docker
+4. `evaluate_model` - Evaluate model performance
+5. `register_model` - Register to MLflow Registry
+6. `notify_completion` - Send notification
+
+**Task Dependencies**:
+```
+validate_data → setup_dvc → train_model → evaluate_model → register_model → notify_completion
 ```
 
-### Issue 3: Grafana không có dashboard
-```powershell
-# Import dashboard qua script
-python import_grafana_dashboard.py
+#### DAG 2: Deployment Pipeline
 
-# Or manual:
-# Grafana UI → Dashboards → Import → Upload monitoring/grafana/dashboards/rice-disease-api.json
+**Name**: `rice_disease_deployment_pipeline`  
+**Schedule**: Manual trigger  
+**Purpose**: Deploy best model to production
+
+**Tasks**:
+1. `fetch_best_model` - Get best model from MLflow
+2. `validate_model` - Validate model
+3. `build_api_image` - Build Docker image
+4. `deploy_api` - Deploy API container
+5. `health_check` - Verify deployment
+6. `notify_deployment` - Send notification
+
+### 7.3. Enable DAG
+
+```powershell
+# Enable via CLI
+docker exec rice-airflow-webserver airflow dags unpause rice_disease_training_pipeline
+
+# Or use UI: Toggle switch next to DAG name
 ```
 
-### Issue 4: API không load model
+### 7.4. Trigger DAG
+
+#### Method 1: UI
+
+1. Find DAG in list
+2. Click **▶️ Play** button (right side)
+3. Click **"Trigger DAG"**
+4. (Optional) Add config JSON
+5. Click **"Trigger"**
+
+#### Method 2: CLI
+
+```powershell
+# Trigger training pipeline
+docker exec rice-airflow-webserver airflow dags trigger rice_disease_training_pipeline
+
+# Trigger with config
+docker exec rice-airflow-webserver airflow dags trigger rice_disease_training_pipeline --conf '{"epochs": 10}'
+
+# Trigger deployment pipeline
+docker exec rice-airflow-webserver airflow dags trigger rice_disease_deployment_pipeline
+```
+
+### 7.5. Monitor DAG Execution
+
+#### View Graph
+
+1. Click on DAG name
+2. See **Graph View** (default)
+3. Watch tasks change colors:
+   - ⚪ Queued (white)
+   - 🟡 Running (yellow)
+   - 🟢 Success (green)
+   - 🔴 Failed (red)
+
+#### View Logs
+
+1. Click on a task box
+2. Click **"Log"** button
+3. View realtime execution logs
+4. Check for errors/warnings
+
+#### Other Views
+
+- **Grid**: Historical runs in grid format
+- **Calendar**: Runs on calendar view
+- **Code**: View DAG source code
+- **Gantt**: Task timeline
+
+### 7.6. Airflow CLI Commands
+
+```powershell
+# List all DAGs
+docker exec rice-airflow-webserver airflow dags list
+
+# List tasks in DAG
+docker exec rice-airflow-webserver airflow tasks list rice_disease_training_pipeline
+
+# View DAG structure
+docker exec rice-airflow-webserver airflow dags show rice_disease_training_pipeline
+
+# Test single task (without running full DAG)
+docker exec rice-airflow-webserver airflow tasks test rice_disease_training_pipeline validate_data 2024-01-01
+
+# View task logs
+docker exec rice-airflow-webserver airflow tasks logs rice_disease_training_pipeline train_model <execution_date> 1
+
+# List recent runs
+docker exec rice-airflow-webserver airflow dags list-runs -d rice_disease_training_pipeline
+
+# Clear failed tasks (to retry)
+docker exec rice-airflow-webserver airflow tasks clear rice_disease_training_pipeline --task-regex "train_model" -y
+```
+
+### 7.7. Check DAG Status
+
+```powershell
+# Get DAG state
+docker exec rice-airflow-webserver airflow dags state rice_disease_training_pipeline <execution_date>
+
+# List task instances
+docker exec rice-airflow-webserver airflow tasks states-for-dag-run rice_disease_training_pipeline <execution_date>
+```
+
+---
+
+## 8. PROMETHEUS & GRAFANA - MONITORING
+
+### 8.1. Generate Traffic for Metrics
+
+```powershell
+# Generate 20 requests
+python generate_traffic.py
+# Choose option 1
+
+# Generate 100 requests automatically
+python generate_demo_traffic.py
+
+# Check current metrics
+python test_metrics.py
+```
+
+### 8.2. Prometheus
+
+**URL**: http://localhost:9090
+
+```powershell
+# Open Prometheus
+Start-Process http://localhost:9090
+```
+
+#### Key Metrics Available
+
+| Metric | Description |
+|--------|-------------|
+| `inference_requests_total` | Total API requests |
+| `inference_latency_seconds` | Request latency histogram |
+| `predictions_by_class_total` | Predictions per class |
+| `process_cpu_seconds_total` | CPU usage |
+| `process_resident_memory_bytes` | Memory usage |
+
+#### Useful Queries
+
+```promql
+# 1. Total requests
+sum(inference_requests_total)
+
+# 2. Request rate (per second)
+rate(inference_requests_total[1m])
+
+# 3. Requests in last 5 minutes
+increase(inference_requests_total[5m])
+
+# 4. Average latency
+rate(inference_latency_seconds_sum[5m]) / rate(inference_latency_seconds_count[5m])
+
+# 5. 95th percentile latency
+histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m]))
+
+# 6. Top 3 predicted classes
+topk(3, predictions_by_class_total)
+
+# 7. Predictions by class
+sum by (class_name) (predictions_by_class_total)
+
+# 8. Memory usage (MB)
+process_resident_memory_bytes / 1024 / 1024
+
+# 9. CPU time
+rate(process_cpu_seconds_total[5m])
+```
+
+#### How to Query
+
+1. Go to http://localhost:9090
+2. Enter query in **Expression** box
+3. Click **Execute**
+4. Switch between **Table** and **Graph** views
+5. Adjust time range (e.g., Last 15 minutes)
+
+### 8.3. Grafana
+
+**URL**: http://localhost:3000  
+**Username**: `admin`  
+**Password**: `admin`
+
+```powershell
+# Open Grafana
+Start-Process http://localhost:3000
+```
+
+#### Setup Data Source
+
+1. Login with `admin/admin`
+2. (First time) Skip password change or set new password
+3. Click **⚙️ Configuration** → **Data sources**
+4. Click **Add data source**
+5. Select **Prometheus**
+6. Configure:
+   - **Name**: Prometheus
+   - **URL**: `http://prometheus:9090` (for Docker)
+   - Or `http://localhost:9090` (for local)
+7. Click **Save & Test**
+8. Should see: ✅ "Data source is working"
+
+#### Create Dashboard
+
+**Option 1: Quick Single Panel**
+
+1. Click **+** → **Dashboard**
+2. Click **Add new panel**
+3. In query editor:
+   - Select **Prometheus** datasource
+   - Enter query: `inference_requests_total`
+4. Click **Run query**
+5. Set panel title: "Total API Requests"
+6. Select visualization type: **Stat**
+7. Click **Apply**
+8. Click **💾 Save dashboard**
+
+**Option 2: Complete Dashboard**
+
+Create multiple panels:
+
+**Panel 1: Total Requests**
+- Query: `inference_requests_total`
+- Visualization: Stat
+- Title: "Total Requests"
+
+**Panel 2: Request Rate**
+- Query: `rate(inference_requests_total[1m])`
+- Visualization: Graph
+- Title: "Request Rate (req/s)"
+- Unit: "ops/s"
+
+**Panel 3: Average Latency**
+- Query: `rate(inference_latency_seconds_sum[5m]) / rate(inference_latency_seconds_count[5m])`
+- Visualization: Graph
+- Title: "Average Response Time"
+- Unit: "seconds (s)"
+
+**Panel 4: P95 Latency**
+- Query: `histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m]))`
+- Visualization: Graph
+- Title: "95th Percentile Latency"
+
+**Panel 5: Predictions Distribution**
+- Query: `predictions_by_class_total`
+- Visualization: Bar chart or Pie chart
+- Title: "Predictions by Class"
+- Legend: `{{class_name}}`
+
+**Panel 6: Memory Usage**
+- Query: `process_resident_memory_bytes / 1024 / 1024`
+- Visualization: Graph
+- Title: "Memory Usage (MB)"
+
+#### Dashboard Settings
+
+- **Auto-refresh**: Set to 5s or 10s
+- **Time range**: Last 15 minutes or Last 1 hour
+- **Theme**: Dark or Light
+
+#### Save Dashboard
+
+1. Click **💾 Save dashboard** (top right)
+2. Enter name: "Rice Disease API Monitoring"
+3. Click **Save**
+
+### 8.4. Real-time Monitoring Demo
+
+```powershell
+# Terminal 1: Generate continuous traffic
+while($true) { 
+    python quick_test_api.py
+    Start-Sleep -Seconds 2
+}
+
+# Terminal 2: Watch metrics
+python test_metrics.py
+
+# Browser: Watch Grafana dashboard update in realtime
+```
+
+---
+
+## 9. DEMO FLOW HOÀN CHỈNH
+
+### 🎬 Demo Script (30-45 phút)
+
+#### Phần 1: Giới Thiệu & Setup (5 phút)
+
+```powershell
+# 1. Navigate to project
+cd e:\MLOps\Final\RiceLeafsDisease
+
+# 2. Check dataset
+Get-ChildItem train/ -Directory
+Get-ChildItem validation/ -Directory
+
+# 3. Show project structure
+tree /F /A
+```
+
+**Talking Points**:
+- Giới thiệu bài toán: 6 loại bệnh lá lúa
+- Dataset: 2,100 train / 528 validation
+- Architecture: EfficientNet-B0
+- MLOps tools được sử dụng
+
+#### Phần 2: MLflow Tracking (5 phút)
+
+```powershell
+# 1. Start MLflow (nếu chưa chạy)
+mlflow server --host 0.0.0.0 --port 5000
+
+# 2. Open UI
+Start-Process http://localhost:5000
+
+# 3. Train quick model (demo)
+python src/train.py --epochs 5 --model-name efficientnet_b0
+```
+
+**Demo trong UI**:
+- Xem experiments list
+- Click vào run mới nhất
+- Show parameters logged
+- Show metrics charts (loss, accuracy)
+- Show artifacts (model file, confusion matrix)
+
+**Talking Points**:
+- MLflow tracking tự động log parameters, metrics
+- Compare multiple runs easily
+- Artifact storage cho reproducibility
+
+#### Phần 3: FastAPI Deployment (8 phút)
+
+```powershell
+# 1. Start API
+python start_api.py
+
+# 2. Open Swagger docs
+Start-Process http://localhost:8000/docs
+
+# 3. Test health
+curl http://localhost:8000/health
+
+# 4. Test prediction
+python quick_test_api.py
+```
+
+**Demo trong Swagger UI**:
+1. Mở http://localhost:8000/docs
+2. Thử `/health` endpoint
+3. Thử `/model/info` endpoint
+4. Thử `/predict` endpoint:
+   - Click "Try it out"
+   - Upload image từ validation/healthy/
+   - Execute và xem response
+   - Show confidence scores
+
+**Talking Points**:
+- FastAPI cung cấp automatic API docs
+- Input validation với Pydantic
+- Async support cho high performance
+- Easy to test với interactive UI
+
+#### Phần 4: Docker Orchestration (7 phút)
+
+```powershell
+# 1. Show docker-compose.yml
+code docker-compose.yml
+
+# 2. Start all services
+docker-compose up -d
+
+# 3. Check status
+docker-compose ps
+
+# 4. Test services
+curl http://localhost:8000/health  # API
+curl http://localhost:5000         # MLflow
+curl http://localhost:8080         # Airflow
+```
+
+**Demo**:
+- Show 8 services running
+- Explain each service purpose
+- Show logs: `docker-compose logs -f api`
+- Show resource usage: `docker stats`
+
+**Talking Points**:
+- Docker containerization cho consistency
+- docker-compose orchestrates multiple services
+- Easy to deploy anywhere
+- Reproducible environment
+
+#### Phần 5: Airflow Orchestration (8 phút)
+
+```powershell
+# 1. Open Airflow UI
+Start-Process http://localhost:8080
+
+# 2. Login (admin/admin)
+
+# 3. Enable DAG
+docker exec rice-airflow-webserver airflow dags unpause rice_disease_training_pipeline
+
+# 4. Trigger pipeline
+docker exec rice-airflow-webserver airflow dags trigger rice_disease_training_pipeline
+```
+
+**Demo trong UI**:
+1. Show DAGs list
+2. Click vào training pipeline
+3. Show Graph View:
+   - Explain task dependencies
+   - Show workflow visualization
+4. Trigger DAG và watch execution
+5. Click vào task → View logs
+6. Show Grid view (historical runs)
+
+**Talking Points**:
+- Airflow orchestrates complex workflows
+- Automatic scheduling (@weekly)
+- Retry mechanism cho failed tasks
+- Monitoring và logging built-in
+- Integration với Docker, MLflow
+
+#### Phần 6: Monitoring với Prometheus & Grafana (7 phút)
+
+```powershell
+# 1. Generate traffic
+python generate_demo_traffic.py
+
+# 2. Open Prometheus
+Start-Process http://localhost:9090
+
+# 3. Open Grafana
+Start-Process http://localhost:3000
+```
+
+**Demo Prometheus**:
+1. Go to Graph tab
+2. Query: `inference_requests_total`
+3. Query: `rate(inference_requests_total[1m])`
+4. Query: `predictions_by_class_total`
+5. Show graph visualization
+
+**Demo Grafana**:
+1. Login (admin/admin)
+2. Add Prometheus datasource
+3. Create dashboard
+4. Add panel với query: `inference_requests_total`
+5. Add graph panel với query: `rate(inference_requests_total[1m])`
+6. Show realtime updates
+
+**Generate more traffic**:
+```powershell
+# Terminal mới
+python generate_demo_traffic.py
+# Watch dashboard update realtime
+```
+
+**Talking Points**:
+- Prometheus scrapes metrics từ API
+- Grafana visualizes metrics beautifully
+- Real-time monitoring
+- Alerts có thể setup cho anomalies
+- Production-ready monitoring stack
+
+---
+
+## 10. TROUBLESHOOTING
+
+### 10.1. MLflow Issues
+
+#### MLflow không start
+
+```powershell
+# Check port
+netstat -ano | findstr :5000
+
+# Kill process if needed
+taskkill /PID <PID> /F
+
+# Restart
+mlflow server --host 0.0.0.0 --port 5000
+```
+
+#### Connection refused
+
+```powershell
+# Check tracking URI
+python -c "import mlflow; print(mlflow.get_tracking_uri())"
+
+# Set correct URI
+$env:MLFLOW_TRACKING_URI = "http://localhost:5000"
+```
+
+### 10.2. API Issues
+
+#### API không start
+
 ```powershell
 # Check model file exists
-ls models/best_model.pth
+Test-Path models/efficientnet_b0_optimized/best_model.pth
 
-# Check API logs
-docker logs rice-api --tail 50
+# Check port
+netstat -ano | findstr :8000
 
-# Restart API
-docker-compose restart api
+# Restart with debug
+uvicorn api.app:app --host 0.0.0.0 --port 8000 --log-level debug
 ```
 
-### Issue 5: Tests fail
+#### Prediction fails
+
 ```powershell
-# Fix urllib3 version conflict
-pip install "urllib3<2.0" requests-toolbelt
+# Verify image file
+python -c "from PIL import Image; img = Image.open('validation/healthy/healthy_001.jpg'); print(img.size)"
 
-# Re-run tests
-python -m pytest tests/test_data.py tests/test_model.py -v
+# Test with curl
+curl -X POST "http://localhost:8000/predict" -F "file=@validation/healthy/healthy_001.jpg"
 ```
 
-### Issue 6: Airflow không access được
+### 10.3. Docker Issues
+
+#### Containers won't start
+
 ```powershell
-# Check containers
-docker ps | Select-String airflow
+# View logs
+docker-compose logs
 
-# Check logs
-docker logs rice-airflow-webserver --tail 30
+# Restart services
+docker-compose down
+docker-compose up -d
 
-# Create admin user if missing
-docker exec rice-airflow-webserver airflow users create \
-  --username admin --password admin \
-  --firstname Admin --lastname User \
-  --role Admin --email admin@example.com
+# Check disk space
+docker system df
+```
+
+#### Port conflicts
+
+```powershell
+# Find process using port
+netstat -ano | findstr :<PORT>
+
+# Kill process
+taskkill /PID <PID> /F
+```
+
+#### Build errors
+
+```powershell
+# Clean build
+docker-compose build --no-cache
+
+# Prune system
+docker system prune -a
+```
+
+### 10.4. Airflow Issues
+
+#### DAGs not showing
+
+```powershell
+# Check DAG errors
+docker exec rice-airflow-webserver airflow dags list-import-errors
+
+# Verify DAG syntax
+python airflow/dags/training_pipeline.py
+
+# Restart scheduler
+docker-compose restart airflow-scheduler
+```
+
+#### Tasks fail
+
+```powershell
+# View logs
+docker exec rice-airflow-webserver airflow tasks logs <dag_id> <task_id> <execution_date>
+
+# Clear to retry
+docker exec rice-airflow-webserver airflow tasks clear <dag_id> --task-id <task_id> -y
+```
+
+### 10.5. Prometheus & Grafana Issues
+
+#### Prometheus no data
+
+```powershell
+# Check targets: http://localhost:9090/targets
+# Should show rice-api as UP
+
+# Check metrics endpoint
+curl http://localhost:8000/metrics
+
+# Restart Prometheus
+docker-compose restart prometheus
+```
+
+#### Grafana can't connect
+
+```powershell
+# Check datasource URL
+# Docker: http://prometheus:9090
+# Local: http://localhost:9090
+
+# Test connection in datasource settings
+# Click "Save & Test"
 ```
 
 ---
 
-## 📊 Demo Metrics Summary
+## 📚 ADDITIONAL RESOURCES
 
-### Performance Metrics
-- **Model Accuracy**: 95.08%
-- **Inference Latency**: 23ms (CPU), ~10ms (GPU)
-- **API Throughput**: 50 req/s (single instance)
-- **System Uptime**: 99.9%
+### Quick Commands Reference
 
-### Code Quality Metrics
-- **Test Coverage**: 88%
-- **Tests Passing**: 11/11
-- **Linting**: 0 errors (flake8)
-- **Security**: 0 vulnerabilities (bandit)
+```powershell
+# Start everything
+docker-compose up -d
 
-### MLOps Metrics
-- **Experiments Tracked**: 10+
-- **Models Registered**: 3 versions
-- **Deployments**: Automated via Airflow
-- **Monitoring**: 3 metrics (requests, latency, predictions)
+# Stop everything
+docker-compose down
+
+# View logs
+docker-compose logs -f
+
+# Restart service
+docker-compose restart <service>
+
+# Rebuild and restart
+docker-compose up -d --build <service>
+
+# Check status
+docker-compose ps
+```
+
+### Useful Scripts
+
+```powershell
+# Generate traffic
+python generate_demo_traffic.py
+
+# Test API
+python quick_test_api.py
+python test_api.py
+
+# Test metrics
+python test_metrics.py
+
+# Find best model
+python src/find_run.py
+
+# View results
+python src/view_all_results.py
+```
+
+### Documentation Files
+
+- [DEMO_COMPLETE.md](DEMO_COMPLETE.md) - Chi tiết từng tool
+- [PROMETHEUS_GRAFANA_DEMO.md](PROMETHEUS_GRAFANA_DEMO.md) - Monitoring guide
+- [AIRFLOW_DEMO_GUIDE.md](AIRFLOW_DEMO_GUIDE.md) - Airflow detailed guide
+- [README.md](README.md) - Project overview
+- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) - Architecture details
+
+### URLs Quick Access
+
+```powershell
+# Open all UIs
+Start-Process http://localhost:5000   # MLflow
+Start-Process http://localhost:8000   # API
+Start-Process http://localhost:8000/docs  # Swagger
+Start-Process http://localhost:8080   # Airflow
+Start-Process http://localhost:9090   # Prometheus
+Start-Process http://localhost:3000   # Grafana
+```
 
 ---
 
-## ✅ Final Checklist
+## 🎯 DEMO CHECKLIST
 
-**Trước khi demo:**
-- [ ] All services running (docker ps)
-- [ ] MLflow UI accessible (localhost:5000)
-- [ ] API healthy (localhost:8000/health)
-- [ ] Prometheus targets UP (localhost:9090/targets)
-- [ ] Grafana dashboard imported (localhost:3000)
-- [ ] Airflow DAGs visible (localhost:8080)
-- [ ] Test images ready (validation/ folder)
-- [ ] All browser tabs open
-- [ ] Backup commands in text file
+### Pre-Demo Setup
 
-**Trong lúc demo:**
-- [ ] Start với architecture diagram
-- [ ] Demo từng phần theo flow
-- [ ] Generate traffic để show real-time monitoring
-- [ ] Highlight automation & CI/CD
-- [ ] End với Q&A
+- [ ] All dependencies installed
+- [ ] Dataset downloaded (2,100 + 528 images)
+- [ ] Docker Desktop running
+- [ ] All containers started
+- [ ] Model trained (at least 1 run)
 
-**Sau demo:**
-- [ ] Answer questions confidently
-- [ ] Show additional features if asked
-- [ ] Provide documentation links
+### During Demo
+
+**MLflow**:
+- [ ] MLflow UI accessible
+- [ ] Show experiment tracking
+- [ ] Show model comparison
+- [ ] Show model registry
+
+**API**:
+- [ ] API running and healthy
+- [ ] Swagger UI working
+- [ ] Successful prediction demo
+- [ ] Show different disease classes
+
+**Docker**:
+- [ ] All 8 containers running
+- [ ] Show docker-compose.yml
+- [ ] Show logs
+- [ ] Show resource usage
+
+**Airflow**:
+- [ ] Airflow UI accessible
+- [ ] DAG visible and enabled
+- [ ] Trigger pipeline
+- [ ] Show graph execution
+- [ ] Show task logs
+
+**Monitoring**:
+- [ ] Generate traffic (100+ requests)
+- [ ] Prometheus queries working
+- [ ] Grafana dashboard created
+- [ ] Realtime updates visible
+
+### Post-Demo
+
+- [ ] Save dashboard configurations
+- [ ] Export MLflow runs
+- [ ] Stop containers (if needed)
+- [ ] Clean up resources
 
 ---
 
-## 🎓 Learning Resources
+## 🚀 QUICK START FOR DEMO
 
-**Documentation:**
-- MLflow: https://mlflow.org/docs/latest/
-- FastAPI: https://fastapi.tiangolo.com/
-- Airflow: https://airflow.apache.org/docs/
-- Prometheus: https://prometheus.io/docs/
-- Docker: https://docs.docker.com/
+```powershell
+# 1. Navigate to project
+cd e:\MLOps\Final\RiceLeafsDisease
 
-**Best Practices:**
-- MLOps Principles: https://ml-ops.org/
-- Model Monitoring: https://www.evidentlyai.com/
-- CI/CD for ML: https://github.com/iterative/dvc
+# 2. Start all services
+docker-compose up -d
+
+# 3. Wait for services to be ready (30 seconds)
+Start-Sleep -Seconds 30
+
+# 4. Generate traffic for monitoring
+python generate_demo_traffic.py
+
+# 5. Open all UIs
+Start-Process http://localhost:5000   # MLflow
+Start-Process http://localhost:8000/docs  # API Docs
+Start-Process http://localhost:8080   # Airflow
+Start-Process http://localhost:9090   # Prometheus
+Start-Process http://localhost:3000   # Grafana
+
+# 6. Trigger Airflow pipeline
+docker exec rice-airflow-webserver airflow dags unpause rice_disease_training_pipeline
+docker exec rice-airflow-webserver airflow dags trigger rice_disease_training_pipeline
+
+# Now you're ready to demo! 🎉
+```
 
 ---
 
-**Good luck với demo! 🚀**
+**🎉 CHÚC BẠN DEMO THÀNH CÔNG!**
+
+*Made with ❤️ for MLOps Education*
